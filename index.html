@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eurovision Master Quiz (1970-2025)</title>
+    <style>
+        :root {
+            --primary: #6200ee;
+            --success: #2e7d32;
+            --warning: #f57c00;
+            --error: #d32f2f;
+            --bg: #f0f2f5;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        /* Sidebar for History */
+        .history-sidebar {
+            width: 400px;
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-table-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 15px;
+            border: 1px solid #eee;
+            border-radius: 8px 8px 0 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        th { background: #f8f9fa; text-align: left; padding: 10px; border-bottom: 2px solid #eee; position: sticky; top: 0; }
+        td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+
+        .table-summary {
+            background: #f8f9fa;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            font-weight: 700;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #444;
+        }
+
+        /* Main Quiz Card */
+        .main-quiz {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card {
+            background: white;
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 25px;
+            font-weight: 700;
+            color: #444;
+            font-size: 1.1rem;
+        }
+
+        .flag-display img {
+            height: 80px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            margin-bottom: 20px;
+        }
+
+        .question-text {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+            min-height: 3.5em;
+        }
+
+        input[type="number"] {
+            width: 120px;
+            padding: 15px;
+            font-size: 1.8rem;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        input:focus { border-color: var(--primary); outline: none; }
+
+        button {
+            width: 100%;
+            padding: 18px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
+        #feedback { margin-top: 20px; font-weight: bold; min-height: 1.5em; }
+
+        .row-correct { color: var(--success); background-color: #f0fff4; }
+        .row-wrong { color: var(--error); background-color: #fff5f5; }
+
+        @media (max-width: 850px) {
+            body { flex-direction: column; height: auto; }
+            .history-sidebar { width: 100%; height: 350px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="history-sidebar">
+        <h2 style="margin: 0;">Session History</h2>
+        <div class="history-table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Country</th>
+                        <th>Guess</th>
+                        <th>Result</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody"></tbody>
+            </table>
+        </div>
+        <div class="table-summary">
+            <span>Rounds: <span id="totalPlayed">0</span></span>
+            <span>Accuracy: <span id="accuracy">0</span>%</span>
+        </div>
+    </div>
+
+    <div class="main-quiz">
+        <div class="card">
+            <div class="stats">
+                <div>Score: <span id="score">0</span></div>
+                <div>Best: <span id="highScore">0</span></div>
+            </div>
+            
+            <div class="flag-display">
+                <img id="flagImg" src="" alt="Flag" style="display:none;">
+            </div>
+
+            <div id="question" class="question-text">Press Start to Begin!</div>
+            
+            <input type="number" id="answerInput" placeholder="?" min="1">
+            <button id="submitBtn">Submit Answer</button>
+            <div id="feedback"></div>
+        </div>
+    </div>
+
+<script>
+    // --- CONFIGURATION ---
+    // Change this to your Ubuntu Server's IP or Domain
+    const API_URL = "http://144.24.171.177/api/question"; 
+
+    let score = 0;
+    let totalRounds = 0;
+    let highScore = localStorage.getItem('esc_highscore') || 0;
+    let currentItem = {};
+    let attempts = 0;
+    let gameStarted = false;
+
+    // --- AUDIO & VOICE ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSound(type) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        if (type === 'success') { osc.frequency.setValueAtTime(523, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1); }
+        else if (type === 'try-again') { osc.frequency.setValueAtTime(392, audioCtx.currentTime); }
+        else { osc.frequency.setValueAtTime(220, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.2); }
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+    }
+
+    function speak(text) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        window.speechSynthesis.speak(utterance);
+    }
+
+    const elements = {
+        question: document.getElementById('question'),
+        flagImg: document.getElementById('flagImg'),
+        input: document.getElementById('answerInput'),
+        score: document.getElementById('score'),
+        highScore: document.getElementById('highScore'),
+        feedback: document.getElementById('feedback'),
+        history: document.getElementById('historyBody'),
+        btn: document.getElementById('submitBtn'),
+        totalPlayed: document.getElementById('totalPlayed'),
+        accuracy: document.getElementById('accuracy')
+    };
+
+    elements.highScore.textContent = highScore;
+
+    async function nextQuestion() {
+        attempts = 0;
+        elements.question.textContent = "Fetching next question...";
+        
+        try {
+            const response = await fetch(API_URL);
+            const data = await response.json();
+
+            // Map data from your Ubuntu API
+            currentItem = {
+                y: data.year,
+                x: data.country_name,
+                code: data.country_code.toLowerCase(),
+                pos: data.rank
+            };
+
+            elements.flagImg.src = `https://flagcdn.com/w160/${currentItem.code}.png`;
+            elements.flagImg.style.display = 'inline-block';
+            
+            const qText = `In which position did ${currentItem.x} finish in the ${currentItem.y} final?`;
+            elements.question.textContent = qText;
+            speak(qText);
+
+            elements.input.value = '';
+            elements.feedback.textContent = '';
+            elements.input.focus();
+        } catch (error) {
+            elements.question.textContent = "Error connecting to server. Please check your API URL.";
+            console.error(error);
+        }
+    }
+
+    function updateSummary() {
+        elements.totalPlayed.textContent = totalRounds;
+        const acc = totalRounds === 0 ? 0 : Math.round((score / totalRounds) * 100);
+        elements.accuracy.textContent = acc;
+    }
+
+    function addToTable(country, code, year, guess, actual, isCorrect) {
+        totalRounds++;
+        const row = document.createElement('tr');
+        row.className = isCorrect ? 'row-correct' : 'row-wrong';
+        const flagThumb = `https://flagcdn.com/w40/${code}.png`;
+        
+        row.innerHTML = `
+            <td><img src="${flagThumb}" width="25" style="border-radius:2px; vertical-align:middle; margin-right:8px;"> ${country} (${year})</td>
+            <td>${guess}</td>
+            <td>${isCorrect ? '✔' : '✘ (Ans: ' + actual + ')'}</td>
+        `;
+        elements.history.prepend(row);
+        updateSummary();
+    }
+
+    function checkAnswer() {
+        if(!gameStarted) {
+            gameStarted = true;
+            nextQuestion();
+            return;
+        }
+
+        const guess = parseInt(elements.input.value);
+        if (isNaN(guess)) return;
+
+        if (guess === currentItem.pos) {
+            score++;
+            elements.score.textContent = score;
+            elements.feedback.style.color = 'var(--success)';
+            elements.feedback.textContent = "Correct! ✨";
+            playSound('success');
+            
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('esc_highscore', highScore);
+                elements.highScore.textContent = highScore;
+            }
+            addToTable(currentItem.x, currentItem.code, currentItem.y, guess, currentItem.pos, true);
+            setTimeout(nextQuestion, 1500);
+        } else {
+            attempts++;
+            if (attempts === 1) {
+                elements.feedback.style.color = 'var(--warning)';
+                elements.feedback.textContent = "Not quite. One more try!";
+                playSound('try-again');
+                elements.input.value = '';
+                elements.input.focus();
+            } else {
+                elements.feedback.style.color = 'var(--error)';
+                elements.feedback.textContent = `Incorrect. The answer was ${currentItem.pos}.`;
+                playSound('error');
+                addToTable(currentItem.x, currentItem.code, currentItem.y, guess, currentItem.pos, false);
+                setTimeout(nextQuestion, 2500);
+            }
+        }
+    }
+
+    elements.btn.onclick = checkAnswer;
+    elements.input.onkeypress = (e) => { if (e.key === 'Enter') checkAnswer(); };
+
+</script>
+</body>
+</html>
