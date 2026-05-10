@@ -151,8 +151,8 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Country</th>
-                        <th>Guess</th>
+                        <th>Question</th>
+                        <th>Your Answer</th>
                         <th>Result</th>
                     </tr>
                 </thead>
@@ -178,7 +178,7 @@
 
             <div id="question" class="question-text">Ready to test your Eurovision knowledge?</div>
             
-            <input type="number" id="answerInput" placeholder="?" min="1">
+            <input type="text" id="answerInput" placeholder="Country name" autocomplete="off">
             <button id="submitBtn">Start Quiz</button>
             <div id="feedback"></div>
         </div>
@@ -244,9 +244,9 @@
             };
 
             elements.flagImg.src = `https://flagcdn.com/w160/${currentItem.code}.png`;
-            elements.flagImg.style.display = 'inline-block';
-            
-            const qText = `In which position did ${currentItem.x} finish in the ${currentItem.y} final?`;
+            elements.flagImg.style.display = 'none';
+
+            const qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} final?`;
             elements.question.textContent = qText;
             speak(qText);
 
@@ -267,22 +267,23 @@
             return;
         }
 
-        const guess = parseInt(elements.input.value);
-        if (isNaN(guess)) return;
+        const guess = elements.input.value.trim();
+        if (!guess) return;
 
-        if (guess === currentItem.pos) {
+        if (guess.toLowerCase() === currentItem.x.toLowerCase()) {
             score++;
             elements.score.textContent = score;
+            elements.flagImg.style.display = 'inline-block';
             elements.feedback.style.color = 'var(--success)';
             elements.feedback.textContent = "Correct! ✨";
             playSound('success');
-            
+
             if (score > highScore) {
                 highScore = score;
                 localStorage.setItem('esc_highscore', highScore);
                 elements.highScore.textContent = highScore;
             }
-            addToTable(currentItem.x, currentItem.code, currentItem.y, guess, currentItem.pos, true);
+            addToTable(currentItem.x, currentItem.code, currentItem.y, currentItem.pos, guess, true);
             setTimeout(nextQuestion, 1500);
         } else {
             attempts++;
@@ -293,25 +294,26 @@
                 elements.input.value = '';
                 elements.input.focus();
             } else {
+                elements.flagImg.style.display = 'inline-block';
                 elements.feedback.style.color = 'var(--error)';
-                elements.feedback.textContent = `Incorrect. The answer was ${currentItem.pos}.`;
+                elements.feedback.textContent = `Incorrect. The answer was ${currentItem.x}.`;
                 playSound('error');
-                addToTable(currentItem.x, currentItem.code, currentItem.y, guess, currentItem.pos, false);
+                addToTable(currentItem.x, currentItem.code, currentItem.y, currentItem.pos, guess, false);
                 setTimeout(nextQuestion, 2500);
             }
         }
     }
 
-    function addToTable(country, code, year, guess, actual, isCorrect) {
+    function addToTable(country, code, year, pos, guess, isCorrect) {
         totalRounds++;
         const row = document.createElement('tr');
         row.className = isCorrect ? 'row-correct' : 'row-wrong';
         const flagThumb = `https://flagcdn.com/w40/${code}.png`;
-        
+
         row.innerHTML = `
-            <td><img src="${flagThumb}" width="25" style="border-radius:2px; vertical-align:middle; margin-right:8px;"> ${country} (${year})</td>
+            <td>Pos ${pos} &middot; ${year}</td>
             <td>${guess}</td>
-            <td>${isCorrect ? '✔' : '✘ (Ans: ' + actual + ')'}</td>
+            <td>${isCorrect ? '✔' : `✘ <img src="${flagThumb}" width="20" style="border-radius:2px;vertical-align:middle;margin-right:4px;">${country}`}</td>
         `;
         elements.history.prepend(row);
         updateSummary();
