@@ -108,14 +108,15 @@
             min-height: 3.5em;
         }
 
-        input[type="number"] {
-            width: 120px;
-            padding: 15px;
-            font-size: 1.8rem;
+        input[type="text"] {
+            width: 100%;
+            padding: 15px 18px;
+            font-size: 1.1rem;
+            font-family: inherit;
             border: 2px solid #ddd;
             border-radius: 12px;
             margin-bottom: 20px;
-            text-align: center;
+            box-sizing: border-box;
         }
 
         input:focus { border-color: var(--primary); outline: none; }
@@ -178,7 +179,27 @@
 
             <div id="question" class="question-text">Ready to test your Eurovision knowledge?</div>
             
-            <input type="text" id="answerInput" placeholder="Country name" autocomplete="off">
+            <input type="text" id="answerInput" placeholder="Country name" list="countriesList" autocomplete="off">
+            <datalist id="countriesList">
+                <option>Albania</option><option>Andorra</option><option>Armenia</option>
+                <option>Australia</option><option>Austria</option><option>Azerbaijan</option>
+                <option>Belarus</option><option>Belgium</option><option>Bosnia and Herzegovina</option>
+                <option>Bulgaria</option><option>Croatia</option><option>Cyprus</option>
+                <option>Czechia</option><option>Denmark</option><option>Estonia</option>
+                <option>Finland</option><option>France</option><option>Georgia</option>
+                <option>Germany</option><option>Greece</option><option>Hungary</option>
+                <option>Iceland</option><option>Ireland</option><option>Israel</option>
+                <option>Italy</option><option>Kazakhstan</option><option>Latvia</option>
+                <option>Lithuania</option><option>Luxembourg</option><option>Malta</option>
+                <option>Moldova</option><option>Monaco</option><option>Montenegro</option>
+                <option>Morocco</option><option>Netherlands</option><option>North Macedonia</option>
+                <option>Norway</option><option>Poland</option><option>Portugal</option>
+                <option>Romania</option><option>Russia</option><option>San Marino</option>
+                <option>Serbia</option><option>Serbia and Montenegro</option><option>Slovakia</option>
+                <option>Slovenia</option><option>Spain</option><option>Sweden</option>
+                <option>Switzerland</option><option>Turkey</option><option>Ukraine</option>
+                <option>United Kingdom</option><option>Wales</option><option>Yugoslavia</option>
+            </datalist>
             <button id="submitBtn">Start Quiz</button>
             <div id="feedback"></div>
         </div>
