@@ -169,6 +169,53 @@
             letter-spacing: 0.3px;
         }
 
+        .year-filter {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .year-filter select {
+            padding: 6px 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            color: #333;
+            cursor: pointer;
+        }
+        .year-filter select:focus { border-color: var(--primary); outline: none; }
+
+        .autocomplete-wrapper { position: relative; margin-bottom: 20px; }
+        .autocomplete-wrapper input[type="text"] { margin-bottom: 0; }
+        .suggestions {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0; right: 0;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            max-height: 220px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            text-align: left;
+        }
+        .suggestion-item {
+            padding: 10px 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+        }
+        .suggestion-item:hover { background: #f3eeff; }
+        .suggestion-item img { width: 28px; border-radius: 3px; flex-shrink: 0; }
+
         .row-correct { color: var(--success); background-color: #f0fff4; }
         .row-wrong { color: var(--error); background-color: #fff5f5; }
 
@@ -209,6 +256,10 @@
                     <div class="brand-tagline">The Eurovision Quiz Bot</div>
                 </div>
             </div>
+            <div class="year-filter">
+                <label for="yearSelect">Year:</label>
+                <select id="yearSelect"><option value="">All years</option></select>
+            </div>
             <div class="stats">
                 <div>Score: <span id="score">0</span></div>
                 <div>Best: <span id="highScore">0</span></div>
@@ -220,27 +271,10 @@
 
             <div id="question" class="question-text">Ready to test your Eurovision knowledge?</div>
             
-            <input type="text" id="answerInput" placeholder="Country name" list="countriesList" autocomplete="off">
-            <datalist id="countriesList">
-                <option>Albania</option><option>Andorra</option><option>Armenia</option>
-                <option>Australia</option><option>Austria</option><option>Azerbaijan</option>
-                <option>Belarus</option><option>Belgium</option><option>Bosnia and Herzegovina</option>
-                <option>Bulgaria</option><option>Croatia</option><option>Cyprus</option>
-                <option>Czechia</option><option>Denmark</option><option>Estonia</option>
-                <option>Finland</option><option>France</option><option>Georgia</option>
-                <option>Germany</option><option>Greece</option><option>Hungary</option>
-                <option>Iceland</option><option>Ireland</option><option>Israel</option>
-                <option>Italy</option><option>Kazakhstan</option><option>Latvia</option>
-                <option>Lithuania</option><option>Luxembourg</option><option>Malta</option>
-                <option>Moldova</option><option>Monaco</option><option>Montenegro</option>
-                <option>Morocco</option><option>Netherlands</option><option>North Macedonia</option>
-                <option>Norway</option><option>Poland</option><option>Portugal</option>
-                <option>Romania</option><option>Russia</option><option>San Marino</option>
-                <option>Serbia</option><option>Serbia and Montenegro</option><option>Slovakia</option>
-                <option>Slovenia</option><option>Spain</option><option>Sweden</option>
-                <option>Switzerland</option><option>Turkey</option><option>Ukraine</option>
-                <option>United Kingdom</option><option>Wales</option><option>Yugoslavia</option>
-            </datalist>
+            <div class="autocomplete-wrapper">
+                <input type="text" id="answerInput" placeholder="Country name" autocomplete="off">
+                <div id="suggestionsList" class="suggestions"></div>
+            </div>
             <button id="submitBtn">Start Quiz</button>
             <div id="feedback"></div>
         </div>
@@ -249,12 +283,40 @@
 <script>
     const API_URL = "/api/question";
 
+    const ALL_COUNTRIES = [
+        {name:"Albania",code:"al"},{name:"Andorra",code:"ad"},{name:"Armenia",code:"am"},
+        {name:"Australia",code:"au"},{name:"Austria",code:"at"},{name:"Azerbaijan",code:"az"},
+        {name:"Belarus",code:"by"},{name:"Belgium",code:"be"},{name:"Bosnia and Herzegovina",code:"ba"},
+        {name:"Bulgaria",code:"bg"},{name:"Croatia",code:"hr"},{name:"Cyprus",code:"cy"},
+        {name:"Czechia",code:"cz"},{name:"Denmark",code:"dk"},{name:"Estonia",code:"ee"},
+        {name:"Finland",code:"fi"},{name:"France",code:"fr"},{name:"Georgia",code:"ge"},
+        {name:"Germany",code:"de"},{name:"Greece",code:"gr"},{name:"Hungary",code:"hu"},
+        {name:"Iceland",code:"is"},{name:"Ireland",code:"ie"},{name:"Israel",code:"il"},
+        {name:"Italy",code:"it"},{name:"Kazakhstan",code:"kz"},{name:"Latvia",code:"lv"},
+        {name:"Lithuania",code:"lt"},{name:"Luxembourg",code:"lu"},{name:"Malta",code:"mt"},
+        {name:"Moldova",code:"md"},{name:"Monaco",code:"mc"},{name:"Montenegro",code:"me"},
+        {name:"Morocco",code:"ma"},{name:"Netherlands",code:"nl"},{name:"North Macedonia",code:"mk"},
+        {name:"Norway",code:"no"},{name:"Poland",code:"pl"},{name:"Portugal",code:"pt"},
+        {name:"Romania",code:"ro"},{name:"Russia",code:"ru"},{name:"San Marino",code:"sm"},
+        {name:"Serbia",code:"rs"},{name:"Serbia and Montenegro",code:"cs"},{name:"Slovakia",code:"sk"},
+        {name:"Slovenia",code:"si"},{name:"Spain",code:"es"},{name:"Sweden",code:"se"},
+        {name:"Switzerland",code:"ch"},{name:"Turkey",code:"tr"},{name:"Ukraine",code:"ua"},
+        {name:"United Kingdom",code:"gb"},{name:"Yugoslavia",code:"yu"}
+    ];
+
     let score = 0;
     let totalRounds = 0;
     let highScore = localStorage.getItem('esc_highscore') || 0;
     let currentItem = {};
     let attempts = 0;
     let gameStarted = false;
+
+    const yearSelect = document.getElementById('yearSelect');
+    for (let y = 2025; y >= 1970; y--) {
+        const opt = document.createElement('option');
+        opt.value = y; opt.textContent = y;
+        yearSelect.appendChild(opt);
+    }
 
     // --- AUDIO & VOICE ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -279,6 +341,7 @@
         question: document.getElementById('question'),
         flagImg: document.getElementById('flagImg'),
         input: document.getElementById('answerInput'),
+        suggestions: document.getElementById('suggestionsList'),
         score: document.getElementById('score'),
         highScore: document.getElementById('highScore'),
         feedback: document.getElementById('feedback'),
@@ -290,19 +353,49 @@
 
     elements.highScore.textContent = highScore;
 
+    // --- AUTOCOMPLETE ---
+    elements.input.addEventListener('input', () => {
+        const val = elements.input.value.trim().toLowerCase();
+        if (!val) { elements.suggestions.style.display = 'none'; return; }
+        const matches = ALL_COUNTRIES.filter(c => c.name.toLowerCase().includes(val)).slice(0, 8);
+        if (!matches.length) { elements.suggestions.style.display = 'none'; return; }
+        elements.suggestions.innerHTML = matches.map(c =>
+            `<div class="suggestion-item" data-name="${c.name}">
+                <img src="https://flagcdn.com/w40/${c.code}.png" alt="">
+                ${c.name}
+            </div>`
+        ).join('');
+        elements.suggestions.style.display = 'block';
+        elements.suggestions.querySelectorAll('.suggestion-item').forEach(item => {
+            item.addEventListener('click', () => {
+                elements.input.value = item.dataset.name;
+                elements.suggestions.style.display = 'none';
+                elements.input.focus();
+            });
+        });
+    });
+
+    document.addEventListener('click', e => {
+        if (!e.target.closest('.autocomplete-wrapper')) elements.suggestions.style.display = 'none';
+    });
+
     async function nextQuestion() {
         attempts = 0;
+        elements.suggestions.style.display = 'none';
         elements.question.textContent = "Fetching next question...";
-        
+
         try {
-            const response = await fetch(API_URL);
+            const year = yearSelect.value;
+            const url = year ? `${API_URL}?year=${year}` : API_URL;
+            const response = await fetch(url);
             const data = await response.json();
 
             currentItem = {
                 y: data.year,
                 x: data.country_name,
                 code: data.country_code.toLowerCase(),
-                pos: data.rank
+                pos: data.rank,
+                validAnswers: data.valid_answers || [data.country_name]
             };
 
             elements.flagImg.src = `https://flagcdn.com/w160/${currentItem.code}.png`;
@@ -322,7 +415,7 @@
     }
 
     function checkAnswer() {
-        if(!gameStarted) {
+        if (!gameStarted) {
             gameStarted = true;
             elements.btn.textContent = "Submit Answer";
             nextQuestion();
@@ -331,8 +424,11 @@
 
         const guess = elements.input.value.trim();
         if (!guess) return;
+        elements.suggestions.style.display = 'none';
 
-        if (guess.toLowerCase() === currentItem.x.toLowerCase()) {
+        const isCorrect = currentItem.validAnswers.some(a => a.toLowerCase() === guess.toLowerCase());
+
+        if (isCorrect) {
             score++;
             elements.score.textContent = score;
             elements.flagImg.style.display = 'inline-block';
