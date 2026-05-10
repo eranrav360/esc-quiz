@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eurovision Master Quiz (1970-2025)</title>
+    <title>Esci · Eurovision Quiz Bot</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%236200ee'/><text y='78' x='12' font-size='72'>🎤</text></svg>">
     <style>
         :root {
             --primary: #6200ee;
@@ -135,6 +136,39 @@
 
         #feedback { margin-top: 20px; font-weight: bold; min-height: 1.5em; }
 
+        .brand-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+        .brand-icon-wrap {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6200ee, #9c4dff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(98,0,238,0.35);
+        }
+        .brand-name {
+            font-size: 1.9rem;
+            font-weight: 800;
+            color: #6200ee;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+        }
+        .brand-tagline {
+            font-size: 0.78rem;
+            color: #999;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+
         .row-correct { color: var(--success); background-color: #f0fff4; }
         .row-wrong { color: var(--error); background-color: #fff5f5; }
 
@@ -168,6 +202,13 @@
 
     <div class="main-quiz">
         <div class="card">
+            <div class="brand-header">
+                <div class="brand-icon-wrap">🎤</div>
+                <div>
+                    <div class="brand-name">Esci</div>
+                    <div class="brand-tagline">The Eurovision Quiz Bot</div>
+                </div>
+            </div>
             <div class="stats">
                 <div>Score: <span id="score">0</span></div>
                 <div>Best: <span id="highScore">0</span></div>
