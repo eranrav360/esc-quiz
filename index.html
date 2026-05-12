@@ -216,6 +216,26 @@
         .suggestion-item:hover { background: #f3eeff; }
         .suggestion-item img { width: 28px; border-radius: 3px; flex-shrink: 0; }
 
+        #bonusSection {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px dashed #e8e0f8;
+            display: none;
+        }
+        .bonus-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+        .bonus-q { font-size: 1rem; font-weight: 600; color: #333; margin-bottom: 12px; }
+        .bonus-actions { display: flex; gap: 8px; }
+        .bonus-actions button { flex: 1; padding: 14px; font-size: 1rem; }
+        .btn-skip { background: #9e9e9e !important; }
+        #bonusFeedback { margin-top: 12px; font-weight: bold; min-height: 1.2em; font-size: 0.95rem; }
+
         .row-correct { color: var(--success); background-color: #f0fff4; }
         .row-wrong { color: var(--error); background-color: #fff5f5; }
 
@@ -271,18 +291,28 @@
 
             <div id="question" class="question-text">Ready to test your Eurovision knowledge?</div>
             
-            <div class="autocomplete-wrapper">
-                <input type="text" id="answerInput" placeholder="Country name" autocomplete="off">
-                <div id="suggestionsList" class="suggestions"></div>
+            <div id="mainInputArea">
+                <div class="autocomplete-wrapper">
+                    <input type="text" id="answerInput" placeholder="Country name" autocomplete="off">
+                    <div id="suggestionsList" class="suggestions"></div>
+                </div>
+                <button id="submitBtn">Start Quiz</button>
             </div>
-            <button id="submitBtn">Start Quiz</button>
             <div id="feedback"></div>
+            <div id="bonusSection">
+                <div class="bonus-label">🎁 Bonus</div>
+                <div id="bonusQ" class="bonus-q"></div>
+                <input type="text" id="bonusInput" placeholder="" autocomplete="off">
+                <div class="bonus-actions">
+                    <button id="bonusSubmitBtn">Answer (+1)</button>
+                    <button id="bonusSkipBtn" class="btn-skip">Skip</button>
+                </div>
+                <div id="bonusFeedback"></div>
+            </div>
         </div>
     </div>
 
 <script>
-    const API_URL = "/api/question";
-
     const ALL_COUNTRIES = [
         {name:"Albania",code:"al"},{name:"Andorra",code:"ad"},{name:"Armenia",code:"am"},
         {name:"Australia",code:"au"},{name:"Austria",code:"at"},{name:"Azerbaijan",code:"az"},
@@ -292,7 +322,7 @@
         {name:"Finland",code:"fi"},{name:"France",code:"fr"},{name:"Georgia",code:"ge"},
         {name:"Germany",code:"de"},{name:"Greece",code:"gr"},{name:"Hungary",code:"hu"},
         {name:"Iceland",code:"is"},{name:"Ireland",code:"ie"},{name:"Israel",code:"il"},
-        {name:"Italy",code:"it"},{name:"Kazakhstan",code:"kz"},{name:"Latvia",code:"lv"},
+        {name:"Italy",code:"it"},{name:"Latvia",code:"lv"},
         {name:"Lithuania",code:"lt"},{name:"Luxembourg",code:"lu"},{name:"Malta",code:"mt"},
         {name:"Moldova",code:"md"},{name:"Monaco",code:"mc"},{name:"Montenegro",code:"me"},
         {name:"Morocco",code:"ma"},{name:"Netherlands",code:"nl"},{name:"North Macedonia",code:"mk"},
@@ -304,18 +334,65 @@
         {name:"United Kingdom",code:"gb"},{name:"Yugoslavia",code:"yu"}
     ];
 
-    let score = 0;
-    let totalRounds = 0;
+    // --- STATE ---
+    let allQuestions = [], questionPool = [], poolIndex = 0;
+    let score = 0, totalRounds = 0;
     let highScore = localStorage.getItem('esc_highscore') || 0;
-    let currentItem = {};
-    let attempts = 0;
-    let gameStarted = false;
+    let currentItem = {}, attempts = 0, gameStarted = false;
+    let bonusQueue = [], bonusStep = 0;
 
+    // --- HELPERS ---
+    function shuffle(arr) {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    }
+
+    function fuzzyMatch(input, target) {
+        if (!input || !target) return false;
+        const norm = s => s.toLowerCase().replace(/['"()]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        const a = norm(input), b = norm(target);
+        if (a === b || b.includes(a) || a.includes(b)) return true;
+        const wa = a.split(' ').filter(w => w.length > 2);
+        const wb = b.split(' ').filter(w => w.length > 2);
+        if (!wa.length) return false;
+        const hits = wa.filter(w => wb.some(t => t.includes(w) || w.includes(t))).length;
+        return hits >= Math.ceil(wa.length * 0.6);
+    }
+
+    // --- YEAR DROPDOWN ---
     const yearSelect = document.getElementById('yearSelect');
     for (let y = 2025; y >= 1970; y--) {
         const opt = document.createElement('option');
         opt.value = y; opt.textContent = y;
         yearSelect.appendChild(opt);
+    }
+    yearSelect.addEventListener('change', () => { resetPool(); if (gameStarted) nextQuestion(); });
+
+    // --- POOL MANAGEMENT ---
+    async function loadQuestions() {
+        elements.question.textContent = "Loading questions...";
+        const resp = await fetch('/api/questions');
+        allQuestions = await resp.json();
+        resetPool();
+    }
+
+    function resetPool() {
+        const year = parseInt(yearSelect.value);
+        const source = isNaN(year) ? allQuestions : allQuestions.filter(q => q.year === year);
+        questionPool = shuffle(source);
+        poolIndex = 0;
+    }
+
+    function getNextFromPool() {
+        if (poolIndex >= questionPool.length) {
+            questionPool = shuffle(questionPool);
+            poolIndex = 0;
+        }
+        return questionPool[poolIndex++];
     }
 
     // --- AUDIO & VOICE ---
@@ -337,20 +414,25 @@
         window.speechSynthesis.speak(utterance);
     }
 
+    // --- DOM REFS ---
     const elements = {
         question: document.getElementById('question'),
         flagImg: document.getElementById('flagImg'),
         input: document.getElementById('answerInput'),
         suggestions: document.getElementById('suggestionsList'),
+        mainInputArea: document.getElementById('mainInputArea'),
         score: document.getElementById('score'),
         highScore: document.getElementById('highScore'),
         feedback: document.getElementById('feedback'),
         history: document.getElementById('historyBody'),
         btn: document.getElementById('submitBtn'),
         totalPlayed: document.getElementById('totalPlayed'),
-        accuracy: document.getElementById('accuracy')
+        accuracy: document.getElementById('accuracy'),
+        bonusSection: document.getElementById('bonusSection'),
+        bonusQ: document.getElementById('bonusQ'),
+        bonusInput: document.getElementById('bonusInput'),
+        bonusFeedback: document.getElementById('bonusFeedback'),
     };
-
     elements.highScore.textContent = highScore;
 
     // --- AUTOCOMPLETE ---
@@ -374,50 +456,60 @@
             });
         });
     });
-
     document.addEventListener('click', e => {
         if (!e.target.closest('.autocomplete-wrapper')) elements.suggestions.style.display = 'none';
     });
 
-    async function nextQuestion() {
+    // --- QUIZ FLOW ---
+    function nextQuestion() {
         attempts = 0;
         elements.suggestions.style.display = 'none';
-        elements.question.textContent = "Fetching next question...";
+        elements.bonusSection.style.display = 'none';
+        elements.mainInputArea.style.display = 'block';
+        elements.feedback.textContent = '';
+        elements.input.value = '';
 
-        try {
-            const year = yearSelect.value;
-            const url = year ? `${API_URL}?year=${year}` : API_URL;
-            const response = await fetch(url);
-            const data = await response.json();
+        if (!questionPool.length) {
+            elements.question.textContent = "No questions available for this selection.";
+            return;
+        }
 
-            currentItem = {
-                y: data.year,
-                x: data.country_name,
-                code: data.country_code.toLowerCase(),
-                pos: data.rank,
-                validAnswers: data.valid_answers || [data.country_name]
-            };
+        const data = getNextFromPool();
+        currentItem = {
+            y: data.year,
+            x: data.country_name,
+            code: (data.country_code || '').toLowerCase(),
+            pos: data.rank,
+            validAnswers: data.valid_answers || [data.country_name],
+            song:   data.song   || null,
+            artist: data.artist || null,
+            points: data.points != null ? data.points : null,
+        };
 
-            elements.flagImg.src = `https://flagcdn.com/w160/${currentItem.code}.png`;
-            elements.flagImg.style.display = 'none';
+        elements.flagImg.src = `https://flagcdn.com/w160/${currentItem.code}.png`;
+        elements.flagImg.style.display = 'none';
 
-            const qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} final?`;
-            elements.question.textContent = qText;
-            speak(qText);
+        const qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} final?`;
+        elements.question.textContent = qText;
+        speak(qText);
+        elements.input.focus();
+    }
 
-            elements.input.value = '';
-            elements.feedback.textContent = '';
-            elements.input.focus();
-        } catch (error) {
-            elements.question.textContent = "Error connecting to server. Make sure your PM2 process is running!";
-            console.error(error);
+    function addScore() {
+        score++;
+        elements.score.textContent = score;
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('esc_highscore', highScore);
+            elements.highScore.textContent = highScore;
         }
     }
 
-    function checkAnswer() {
+    async function checkAnswer() {
         if (!gameStarted) {
             gameStarted = true;
             elements.btn.textContent = "Submit Answer";
+            await loadQuestions();
             nextQuestion();
             return;
         }
@@ -429,20 +521,27 @@
         const isCorrect = currentItem.validAnswers.some(a => a.toLowerCase() === guess.toLowerCase());
 
         if (isCorrect) {
-            score++;
-            elements.score.textContent = score;
+            addScore();
             elements.flagImg.style.display = 'inline-block';
             elements.feedback.style.color = 'var(--success)';
             elements.feedback.textContent = "Correct! ✨";
             playSound('success');
-
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem('esc_highscore', highScore);
-                elements.highScore.textContent = highScore;
-            }
             addToTable(currentItem.x, currentItem.code, currentItem.y, currentItem.pos, guess, true);
-            setTimeout(nextQuestion, 1500);
+
+            bonusQueue = [];
+            if (currentItem.song)   bonusQueue.push('song');
+            if (currentItem.artist) bonusQueue.push('artist');
+            if (currentItem.points !== null) bonusQueue.push('points');
+
+            if (bonusQueue.length) {
+                bonusStep = 0;
+                setTimeout(() => {
+                    elements.mainInputArea.style.display = 'none';
+                    showBonus();
+                }, 900);
+            } else {
+                setTimeout(nextQuestion, 1500);
+            }
         } else {
             attempts++;
             if (attempts === 1) {
@@ -462,12 +561,67 @@
         }
     }
 
+    // --- BONUS ROUND ---
+    function showBonus() {
+        const step = bonusQueue[bonusStep];
+        elements.bonusSection.style.display = 'block';
+        elements.bonusFeedback.textContent = '';
+        elements.bonusInput.value = '';
+        const n = `${bonusStep + 1}/${bonusQueue.length}`;
+        if (step === 'song')        elements.bonusQ.textContent = `${n} · What was the song called?`;
+        else if (step === 'artist') elements.bonusQ.textContent = `${n} · Who was the artist?`;
+        else                        elements.bonusQ.textContent = `${n} · How many points did they score?`;
+        elements.bonusInput.placeholder = step === 'song' ? 'Song title' : step === 'artist' ? 'Artist name' : 'Number of points';
+        elements.bonusInput.focus();
+    }
+
+    function submitBonus() {
+        const val = elements.bonusInput.value.trim();
+        if (!val) return;
+        const step = bonusQueue[bonusStep];
+        let correct = false, correctAnswer = '';
+
+        if (step === 'song')        { correct = fuzzyMatch(val, currentItem.song);   correctAnswer = currentItem.song; }
+        else if (step === 'artist') { correct = fuzzyMatch(val, currentItem.artist); correctAnswer = currentItem.artist; }
+        else {
+            const num = parseInt(val.replace(/\D/g, ''));
+            correct = num === currentItem.points;
+            correctAnswer = String(currentItem.points);
+        }
+
+        if (correct) {
+            addScore();
+            elements.bonusFeedback.style.color = 'var(--success)';
+            elements.bonusFeedback.textContent = `+1 ✨  "${correctAnswer}"`;
+            playSound('success');
+        } else {
+            elements.bonusFeedback.style.color = 'var(--error)';
+            elements.bonusFeedback.textContent = `It was: "${correctAnswer}"`;
+            playSound('error');
+        }
+        advanceBonus();
+    }
+
+    function skipBonus() {
+        const step = bonusQueue[bonusStep];
+        const ans = step === 'song' ? currentItem.song : step === 'artist' ? currentItem.artist : currentItem.points;
+        elements.bonusFeedback.style.color = '#888';
+        elements.bonusFeedback.textContent = `Answer: "${ans}"`;
+        advanceBonus();
+    }
+
+    function advanceBonus() {
+        bonusStep++;
+        if (bonusStep < bonusQueue.length) setTimeout(showBonus, 1500);
+        else setTimeout(nextQuestion, 1500);
+    }
+
+    // --- HISTORY TABLE ---
     function addToTable(country, code, year, pos, guess, isCorrect) {
         totalRounds++;
         const row = document.createElement('tr');
         row.className = isCorrect ? 'row-correct' : 'row-wrong';
         const flagThumb = `https://flagcdn.com/w40/${code}.png`;
-
         row.innerHTML = `
             <td>Pos ${pos} &middot; ${year}</td>
             <td>${guess}</td>
@@ -483,8 +637,12 @@
         elements.accuracy.textContent = acc;
     }
 
+    // --- WIRE UP ---
     elements.btn.onclick = checkAnswer;
     elements.input.onkeypress = (e) => { if (e.key === 'Enter') checkAnswer(); };
+    document.getElementById('bonusSubmitBtn').onclick = submitBonus;
+    document.getElementById('bonusSkipBtn').onclick = skipBonus;
+    elements.bonusInput.onkeypress = (e) => { if (e.key === 'Enter') submitBonus(); };
 </script>
 </body>
 </html>
