@@ -277,8 +277,10 @@
                 </div>
             </div>
             <div class="year-filter">
-                <label for="yearSelect">Year:</label>
-                <select id="yearSelect"><option value="">All years</option></select>
+                <label>From:</label>
+                <select id="fromYear"></select>
+                <label>To:</label>
+                <select id="toYear"></select>
             </div>
             <div class="stats">
                 <div>Score: <span id="score">0</span></div>
@@ -375,13 +377,19 @@
     }
 
     // --- YEAR DROPDOWN ---
-    const yearSelect = document.getElementById('yearSelect');
-    for (let y = 2025; y >= 1970; y--) {
-        const opt = document.createElement('option');
-        opt.value = y; opt.textContent = y;
-        yearSelect.appendChild(opt);
+    const fromYear = document.getElementById('fromYear');
+    const toYear   = document.getElementById('toYear');
+    for (let y = 1970; y <= 2025; y++) {
+        const a = document.createElement('option');
+        a.value = a.textContent = y;
+        fromYear.appendChild(a);
+        const b = document.createElement('option');
+        b.value = b.textContent = y;
+        toYear.appendChild(b);
     }
-    yearSelect.addEventListener('change', () => { resetPool(); if (gameStarted) nextQuestion(); });
+    fromYear.value = 1970;
+    toYear.value   = 2025;
+    [fromYear, toYear].forEach(s => s.addEventListener('change', () => { resetPool(); if (gameStarted) nextQuestion(); }));
 
     // --- POOL MANAGEMENT ---
     async function loadQuestions() {
@@ -392,8 +400,10 @@
     }
 
     function resetPool() {
-        const year = parseInt(yearSelect.value);
-        const source = isNaN(year) ? allQuestions : allQuestions.filter(q => q.year === year);
+        const from = parseInt(fromYear.value);
+        const to   = parseInt(toYear.value);
+        const lo = Math.min(from, to), hi = Math.max(from, to);
+        const source = allQuestions.filter(q => q.year >= lo && q.year <= hi);
         questionPool = shuffle(source);
         poolIndex = 0;
     }
