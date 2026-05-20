@@ -481,6 +481,15 @@
         if (!e.target.closest('.autocomplete-wrapper')) elements.suggestions.style.display = 'none';
     });
 
+    // --- ROUND LABEL ---
+    function roundLabel(r) {
+        if (!r || r === 'final')      return 'Grand Final';
+        if (r === 'semifinal')        return 'Semi-Final';
+        if (r === 'semifinal1')       return 'Semi-Final 1';
+        if (r === 'semifinal2')       return 'Semi-Final 2';
+        return r;
+    }
+
     // --- QUIZ FLOW ---
     function nextQuestion() {
         attempts = 0;
@@ -501,6 +510,7 @@
             x: data.country_name,
             code: (data.country_code || '').toLowerCase(),
             pos: data.rank,
+            round: data.round || 'final',
             validAnswers: data.valid_answers || [data.country_name],
             song:   data.song   || null,
             artist: data.artist || null,
@@ -510,7 +520,7 @@
         elements.flagImg.src = `https://flagcdn.com/w160/${currentItem.code}.png`;
         elements.flagImg.style.display = 'none';
 
-        const qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} final?`;
+        const qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} ${roundLabel(currentItem.round)}?`;
         elements.question.textContent = qText;
         speak(qText);
         elements.input.focus();
@@ -547,7 +557,7 @@
             elements.feedback.style.color = 'var(--success)';
             elements.feedback.textContent = "Correct! ✨";
             playSound('success');
-            addToTable(currentItem.x, currentItem.code, currentItem.y, currentItem.pos, guess, true);
+            addToTable(currentItem.x, currentItem.code, currentItem.y, currentItem.pos, currentItem.round, guess, true);
 
             bonusQueue = [];
             if (currentItem.song)   bonusQueue.push('song');
@@ -576,7 +586,7 @@
                 elements.feedback.style.color = 'var(--error)';
                 elements.feedback.textContent = `Incorrect. The answer was ${currentItem.x}.`;
                 playSound('error');
-                addToTable(currentItem.x, currentItem.code, currentItem.y, currentItem.pos, guess, false);
+                addToTable(currentItem.x, currentItem.code, currentItem.y, currentItem.pos, currentItem.round, guess, false);
                 setTimeout(nextQuestion, 2500);
             }
         }
@@ -638,13 +648,13 @@
     }
 
     // --- HISTORY TABLE ---
-    function addToTable(country, code, year, pos, guess, isCorrect) {
+    function addToTable(country, code, year, pos, round, guess, isCorrect) {
         totalRounds++;
         const row = document.createElement('tr');
         row.className = isCorrect ? 'row-correct' : 'row-wrong';
         const flagThumb = `https://flagcdn.com/w40/${code}.png`;
         row.innerHTML = `
-            <td>Pos ${pos} &middot; ${year}</td>
+            <td>Pos ${pos} &middot; ${year} &middot; ${roundLabel(round)}</td>
             <td>${guess}</td>
             <td>${isCorrect ? '✔' : `✘ <img src="${flagThumb}" width="20" style="border-radius:2px;vertical-align:middle;margin-right:4px;">${country}`}</td>
         `;
