@@ -633,10 +633,12 @@
 
         // Build question text
         let qText;
-        if (effectiveMode === 'image') {
-            qText = `Which country does this image represent? (${currentItem.y} ${roundLabel(currentItem.round)}, position ${currentItem.pos})`;
-        } else if (effectiveMode === 'audio_intro' || effectiveMode === 'audio_middle') {
-            qText = `Which country performed this song? (${currentItem.y} ${roundLabel(currentItem.round)}, position ${currentItem.pos})`;
+        if (effectiveMode === 'image' || effectiveMode === 'audio_intro' || effectiveMode === 'audio_middle') {
+            const hint = Math.random() < 0.5
+                ? `position ${currentItem.pos}`
+                : `${currentItem.y} ${roundLabel(currentItem.round)}`;
+            const verb = effectiveMode === 'image' ? 'does this image represent' : 'performed this song';
+            qText = `Which country ${verb}? (hint: ${hint})`;
         } else {
             qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} ${roundLabel(currentItem.round)}?`;
         }
