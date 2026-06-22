@@ -314,8 +314,7 @@
                     <option value="all">🎲 All</option>
                     <option value="text">📝 Text</option>
                     <option value="image">🖼️ Image</option>
-                    <option value="audio_intro">🎵 Audio (intro)</option>
-                    <option value="audio_middle">🎵 Audio (middle)</option>
+                    <option value="audio_middle">🎵 Audio</option>
                 </select>
             </div>
             <div class="stats">
@@ -462,7 +461,6 @@
             if (q.year < yLo || q.year > yHi) return false;
             if (q.rank < pLo || q.rank > pHi) return false;
             if (mode === 'image')        return !!q.image;
-            if (mode === 'audio_intro')  return !!q.audio_intro;
             if (mode === 'audio_middle') return !!q.audio_middle;
             return true; // 'text' or 'all'
         });
@@ -608,7 +606,6 @@
         if (selectedMode === 'all') {
             const available = ['text'];
             if (currentItem.image)        available.push('image');
-            if (currentItem.audio_intro)  available.push('audio_intro');
             if (currentItem.audio_middle) available.push('audio_middle');
             effectiveMode = available[Math.floor(Math.random() * available.length)];
         } else {
@@ -620,20 +617,18 @@
         if (effectiveMode === 'image' && currentItem.image) {
             elements.mediaDisplay.innerHTML = `<img class="media-img" src="${mediaUrl(currentItem.image)}" alt="Eurovision entry image">`;
             elements.mediaDisplay.style.display = 'block';
-        } else if ((effectiveMode === 'audio_intro' || effectiveMode === 'audio_middle') && currentItem[effectiveMode]) {
-            const url = mediaUrl(currentItem[effectiveMode]);
-            const label = effectiveMode === 'audio_intro' ? 'Intro clip' : 'Middle clip';
+        } else if (effectiveMode === 'audio_middle' && currentItem.audio_middle) {
+            const url = mediaUrl(currentItem.audio_middle);
             elements.mediaDisplay.innerHTML = `
                 <div class="audio-player">
                     <button class="btn-play-audio" onclick="playAudio('${url.replace(/'/g, "\\'")}')">&#9654; Play</button>
-                    <span style="color:#666;font-size:0.9rem;">${label}</span>
                 </div>`;
             elements.mediaDisplay.style.display = 'block';
         }
 
         // Build question text
         let qText;
-        if (effectiveMode === 'image' || effectiveMode === 'audio_intro' || effectiveMode === 'audio_middle') {
+        if (effectiveMode === 'image' || effectiveMode === 'audio_middle') {
             const hint = Math.random() < 0.5
                 ? `position ${currentItem.pos}`
                 : `${currentItem.y} ${roundLabel(currentItem.round)}`;
