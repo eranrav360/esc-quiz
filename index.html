@@ -195,6 +195,17 @@
         }
         .year-filter select:focus { border-color: var(--primary); outline: none; }
 
+        #mediaDisplay { text-align: center; margin-bottom: 16px; }
+        .media-img { max-width: 100%; max-height: 200px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .audio-player {
+            background: #f8f4ff; border: 2px solid #e0d4ff; border-radius: 12px;
+            padding: 16px 20px; display: flex; align-items: center; justify-content: center; gap: 14px;
+        }
+        .btn-play-audio {
+            background: var(--primary); color: white; border: none; border-radius: 8px;
+            padding: 10px 20px; font-weight: 700; cursor: pointer; font-size: 1rem; width: auto;
+        }
+
         .autocomplete-wrapper { position: relative; margin-bottom: 20px; }
         .autocomplete-wrapper input[type="text"] { margin-bottom: 0; }
         .suggestions {
@@ -297,11 +308,22 @@
                 <label>To:</label>
                 <select id="toPos"></select>
             </div>
+            <div class="year-filter">
+                <span style="color:#888;font-weight:600;min-width:56px;">Mode</span>
+                <select id="mediaMode">
+                    <option value="all">🎲 All</option>
+                    <option value="text">📝 Text</option>
+                    <option value="image">🖼️ Image</option>
+                    <option value="audio_intro">🎵 Audio (intro)</option>
+                    <option value="audio_middle">🎵 Audio (middle)</option>
+                </select>
+            </div>
             <div class="stats">
                 <div>Score: <span id="score">0</span></div>
                 <div>Best: <span id="highScore">0</span></div>
             </div>
             
+            <div id="mediaDisplay" style="display:none;"></div>
             <div class="flag-display">
                 <img id="flagImg" src="" alt="Flag" style="display:none;">
             </div>
@@ -357,6 +379,7 @@
     let highScore = localStorage.getItem('esc_highscore') || 0;
     let currentItem = {}, attempts = 0, gameStarted = false;
     let bonusQueue = [], bonusStep = 0;
+    let currentAudio = null;
 
     // --- HELPERS ---
     function shuffle(arr) {
@@ -418,7 +441,8 @@
     fromPos.value = 1;
     toPos.value   = 30;
 
-    [fromYear, toYear, fromPos, toPos].forEach(s => s.addEventListener('change', () => { resetPool(); if (gameStarted) nextQuestion(); }));
+    const mediaModeSelect = document.getElementById('mediaMode');
+    [fromYear, toYear, fromPos, toPos, mediaModeSelect].forEach(s => s.addEventListener('change', () => { resetPool(); if (gameStarted) nextQuestion(); }));
 
     // --- POOL MANAGEMENT ---
     async function loadQuestions() {
@@ -433,7 +457,15 @@
         const yHi = Math.max(parseInt(fromYear.value), parseInt(toYear.value));
         const pLo = Math.min(parseInt(fromPos.value),  parseInt(toPos.value));
         const pHi = Math.max(parseInt(fromPos.value),  parseInt(toPos.value));
-        const source = allQuestions.filter(q => q.year >= yLo && q.year <= yHi && q.rank >= pLo && q.rank <= pHi);
+        const mode = mediaModeSelect.value;
+        const source = allQuestions.filter(q => {
+            if (q.year < yLo || q.year > yHi) return false;
+            if (q.rank < pLo || q.rank > pHi) return false;
+            if (mode === 'image')        return !!q.image;
+            if (mode === 'audio_intro')  return !!q.audio_intro;
+            if (mode === 'audio_middle') return !!q.audio_middle;
+            return true; // 'text' or 'all'
+        });
         questionPool = shuffle(source);
         poolIndex = 0;
     }
@@ -465,6 +497,19 @@
         window.speechSynthesis.speak(utterance);
     }
 
+    // --- MEDIA HELPERS ---
+    function mediaUrl(rel) {
+        return '/media/' + rel.split('/').map(encodeURIComponent).join('/');
+    }
+    function stopAudio() {
+        if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+    }
+    function playAudio(url) {
+        stopAudio();
+        currentAudio = new Audio(url);
+        currentAudio.play().catch(() => {});
+    }
+
     // --- DOM REFS ---
     const elements = {
         question: document.getElementById('question'),
@@ -483,6 +528,7 @@
         bonusQ: document.getElementById('bonusQ'),
         bonusInput: document.getElementById('bonusInput'),
         bonusFeedback: document.getElementById('bonusFeedback'),
+        mediaDisplay: document.getElementById('mediaDisplay'),
     };
     elements.highScore.textContent = highScore;
 
@@ -523,11 +569,14 @@
     // --- QUIZ FLOW ---
     function nextQuestion() {
         attempts = 0;
+        stopAudio();
         elements.suggestions.style.display = 'none';
         elements.bonusSection.style.display = 'none';
         elements.mainInputArea.style.display = 'block';
         elements.feedback.textContent = '';
         elements.input.value = '';
+        elements.mediaDisplay.style.display = 'none';
+        elements.mediaDisplay.innerHTML = '';
 
         if (!questionPool.length) {
             elements.question.textContent = "No questions available for this selection.";
@@ -542,15 +591,55 @@
             pos: data.rank,
             round: data.round || 'final',
             validAnswers: data.valid_answers || [data.country_name],
-            song:   data.song   || null,
-            artist: data.artist || null,
-            points: data.points != null ? data.points : null,
+            song:         data.song        || null,
+            artist:       data.artist      || null,
+            points:       data.points != null ? data.points : null,
+            image:        data.image       || null,
+            audio_intro:  data.audio_intro || null,
+            audio_middle: data.audio_middle|| null,
         };
 
         elements.flagImg.src = `https://flagcdn.com/w160/${currentItem.code}.png`;
         elements.flagImg.style.display = 'none';
 
-        const qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} ${roundLabel(currentItem.round)}?`;
+        // Pick effective mode
+        const selectedMode = mediaModeSelect.value;
+        let effectiveMode = 'text';
+        if (selectedMode === 'all') {
+            const available = ['text'];
+            if (currentItem.image)        available.push('image');
+            if (currentItem.audio_intro)  available.push('audio_intro');
+            if (currentItem.audio_middle) available.push('audio_middle');
+            effectiveMode = available[Math.floor(Math.random() * available.length)];
+        } else {
+            effectiveMode = selectedMode;
+        }
+        currentItem.effectiveMode = effectiveMode;
+
+        // Show media widget
+        if (effectiveMode === 'image' && currentItem.image) {
+            elements.mediaDisplay.innerHTML = `<img class="media-img" src="${mediaUrl(currentItem.image)}" alt="Eurovision entry image">`;
+            elements.mediaDisplay.style.display = 'block';
+        } else if ((effectiveMode === 'audio_intro' || effectiveMode === 'audio_middle') && currentItem[effectiveMode]) {
+            const url = mediaUrl(currentItem[effectiveMode]);
+            const label = effectiveMode === 'audio_intro' ? 'Intro clip' : 'Middle clip';
+            elements.mediaDisplay.innerHTML = `
+                <div class="audio-player">
+                    <button class="btn-play-audio" onclick="playAudio('${url.replace(/'/g, "\\'")}')">&#9654; Play</button>
+                    <span style="color:#666;font-size:0.9rem;">${label}</span>
+                </div>`;
+            elements.mediaDisplay.style.display = 'block';
+        }
+
+        // Build question text
+        let qText;
+        if (effectiveMode === 'image') {
+            qText = `Which country does this image represent? (${currentItem.y} ${roundLabel(currentItem.round)}, position ${currentItem.pos})`;
+        } else if (effectiveMode === 'audio_intro' || effectiveMode === 'audio_middle') {
+            qText = `Which country performed this song? (${currentItem.y} ${roundLabel(currentItem.round)}, position ${currentItem.pos})`;
+        } else {
+            qText = `Which country finished in position ${currentItem.pos} in the ${currentItem.y} ${roundLabel(currentItem.round)}?`;
+        }
         elements.question.textContent = qText;
         speak(qText);
         elements.input.focus();
